@@ -58,4 +58,35 @@ vite是一个主打极速开发+高效生产构建的打包工具，它利用**[
 #### 3.后处理
 - 生成manifest：如果配置了`build.rollupOptions.output.manualChunks`，vite会生成一个manifest文件，用于记录chunk的名称和对应的文件路径。
 - HTML注入：Vite会回读index.html，将打包生成的JS/CSS文件注入到HTML中，替换开发时的路径。
-## 
+## vite钩子
+### enforce修饰符
+Vite 插件可以通过 enforce 属性来调整钩子的执行顺序（相对于 Vite 内核插件）
+- `pre`：在Vite核心插件之前执行。
+- `默认(无)`：在Vite核心插件之后执行。
+- `post`： 在Vite核心插件和其他默认插件之后执行。
+### 独有钩子
+- `config`：在解析Vite配置前调用，可以修改或合并配置。
+- `configResolved`：在解析Vite配置后调用，可以获取到最终配置。
+- `configureServer`：在开发服务器启动前调用，可以添加中间件、代理、WebSocket(**只在 dev 环境执行**)。
+- `transformIndexHtml`：在HTML解析后调用，可以修改HTML内容。
+- `handleHotUpdate`：在执行默认的 HMR（热模块替换）逻辑之前，自定义对文件变更的处理方式。
+### 模板解析钩子
+- `resolveId`：在解析模块时调用(即遇到一个import语句)，可以修改模块引入路径。
+- `load`：在resolveId解析成功后，加载模块内容时调用，可以修改加载的内容或为虚拟模块提供代码。
+- `transform`：在文件被加载后、但传递给其他插件或浏览器之前调用，对代码进行转译、修改。
+### Rollup插件钩子
+- `buildStart`：在rollup构建开始时调用。
+- `buildEnd`：在rollup构建结束时调用。
+- `outputOptions`：在rollup生成输出配置时调用，可以修改输出配置。
+- `moduleParsed`：在rollup解析模块时调用，可以修改模块解析结果。
+- `renderStart`：在rollup准备开始生成输出文件时调用，可以修改输出文件。
+- `renderChunk`：对每个生成的chunk进行操作（如压缩）。
+- `generateBundle`：所有chunk生成完毕，生成最终文件对象。
+- `writeBundle`：在所有文件写入磁盘后调用。
+- `closeBundle`：在rollup构建关闭时调用。
+### 钩子的执行顺序
+#### 开发环境
+- `config` -> `configResolved` -> `configureServer` -> `buildStart` -> `transformIndexHtml`(注:浏览器请求的是HTML时) -> ?(`handleHotUpdate` -> (注：仅当文件变更时触发)) `resolveId` -> `load` -> `transform`
+#### 生产环境
+- `config` -> `configResolved` -> `outputOptions` -> `buildStart` -> `resolveId` -> `load` -> `transform` -> `moduleParsed` -> `buildEnd` -> `renderStart` -> `renderChunk` -> `generateBundle` -> `transformIndexHtml` -> `writeBundle` -> `closeBundle`
+
