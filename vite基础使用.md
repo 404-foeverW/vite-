@@ -1,12 +1,3 @@
-### 配置文件
-```
-{
-    // 公共基础路径
-    base: 默认值(/) || 绝对路径名(/foo/) || 完整的URL(https://foo.com/) || 空字符串或./,
-
-}
-```
-
 ### 常见功能
 #### import.meta.glob
 从文件系统导入多个模块，并返回一个对象，其中键是文件路径，值是导入的模块。
@@ -51,4 +42,40 @@ const modules = {
 import imgUrl from './img.png'
 document.getElementById('hero-img').src = imgUrl
 ```
-### 
+### 支持动态导入
+```
+const module = await import(`./dir/${file}.js`)
+```
+注意：变量仅代表一层深的文件名。如果 file 是 foo/bar，导入将会失败。
+### --force使用
+作用：强制重新构建所有模块，跳过缓存
+使用场景：
+- 给内部包 package.json 加了新依赖
+- 改了内部包的 dependencies
+- 改了内部包的 main/module/types 入口
+- 重新 pnpm install
+- 内部包引入了新的第三方依赖
+### 资源导入四件套
+vite默认支持识别的文件类型：png|jpeg|gif|svg|mp4|webm|ogg|mp3|wav|flac|aac|woff|woff2|eot|ttf|otf
+- ?url: 将资源作为一个 URL 导入
+- ?raw: 将资源作为一个字符串导入
+- ?inline:  CSS不注入，返回字符串
+- ?worker → 当作Web Worker导入
+### .env文件
+- .env: 所有环境都会加载
+- .env.local: 所有环境都会加载，但会被 git 忽略
+- .env.[mode]: 只在指定模式下加载
+- .env.[mode].local: 只在指定模式下加载，但会被 git 忽略
+- .env.development.local: 只在开发模式下加载，但会被 git 忽略
+- .env.production.local: 只在生产模式下加载，但会被 git 忽略
+- .env.development: 只在开发模式下加载
+- .env.production: 只在生产模式下加载
+注意：为了防止意外地将一些环境变量泄漏到客户端，只有以 VITE_ 为前缀的变量才会暴露给经过 vite 处理的代码。
+```
+VITE_SOME_KEY=123
+DB_PASSWORD=foobar
+```
+```
+console.log(import.meta.env.VITE_SOME_KEY) // 123
+console.log(import.meta.env.DB_PASSWORD) // undefined
+```
