@@ -79,3 +79,73 @@ DB_PASSWORD=foobar
 console.log(import.meta.env.VITE_SOME_KEY) // 123
 console.log(import.meta.env.DB_PASSWORD) // undefined
 ```
+### 后端集成
+#### 目的
+让后端负责渲染HTML的项目，也能完整用上vite的现代前端开发能力（毫秒级HMR、原生ESM、TS/JSX编译、资源处理、打包优化等）。
+#### 原因
+HTML由后端引擎渲染，前端无法直接控制index.html，用不了vite的HRM等能力。
+#### 实现
+##### 开发环境：后端渲染HTML+vite提供前端资源
+核心就是让后端生成的HTML，直接对接vite的开发服务，完整复用HMR能力。
+1. 启动两个服务器：后端服务(负责HTML渲染，提供接口)，Vite dev server(负责前端资源和热更新)。
+2. 后端渲染的HTML模板中，固定注入两段核心脚本:
+   - Vite的HMR客户端：<script type="module" src="http://localhost:5173/@vite/client"></script>
+   - 前端入口文件：<script type="module" src="http://localhost:5173/src/main.js"></script>
+3. 浏览器访问后端服务，拿到渲染后的HTML，会从Vite dev serve拉取前端资源。vite实时编译TS/VUE/JSX等文件，通过Websocket实现HMR热更新，改代码无需刷新页面。
+4. 页面与接口完全同源，无跨域问题，后端的模板变量、权限控制等能力完全保留。
+##### 生产环境：后端动态引入静态资源+vite打包
+核心是manifest.json解决打包后文件带哈希的路径映射问题：
+1. Vite配置中开启manifest：true，执行vite build后，会再打包目录中生成.vite/manifest.json文件，记录源文件与打包后带哈希的文件的映射关系，同时处理CSS，预加载器等依赖。
+2. 把vite打包后的静态资源，复制到后端项目的静态资源目录(如 SpringBoot 的resources/static、Laravel 的public目录)。
+3. 后端渲染HTML时，读取manifest.json，根据源文件名找到对应的打包后文件路径，动态生成```<script>```，```<link>```标签注入到HTML中，自动处理哈希，资源路径，预加载等问题。
+### 虚拟模块
+Vite 虚拟模块（Virtual Modules） 是一种不存在于物理文件系统、由插件动态生成的 ESM 模块，核心作用是**在编译时向代码注入动态内容**，常用于插件开发、构建信息注入、动态配置、代码生成等场景。
+1. 核心概念：
+- 本质：通过vite/rollup插件中的resolveId和load钩子，拦截特定模块ID请求，在内存中返回代码，而非读取磁盘文件。
+- 命名规范(Vite官方约定):
+  - 用户导入: 使用virtual前缀（如 virtual:build-info）。
+  - 内部ID：插件内部使用\0空字符前缀（如 \0virtual:build-info），防止冲突。
+2. 核心作用
+- 动态内容注入：注入构建时间、Git 信息、版本号、环境变量等编译时数据。
+- 无文件代码生成：动态生成路由、国际化、工具函数等，不产生物理文件。
+- 插件能力扩展：框架 / 插件向用户代码暴露 API（如 Vue 的 virtual:vue、UnoCSS 的工具类）。
+- 开发体验优化：支持 HMR，修改虚拟模块内容可实时更新。
+```
+// vite.config.js
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    {
+      name: 'virtual:build-info', // 插件名
+      // 1. 解析模块 ID
+      resolveId(id) {
+        if (id === 'virtual:build-info') {
+          return '\0virtual:build-info' // 内部唯一 ID
+        }
+      },
+      // 2. 加载模块内容
+      load(id) {
+        if (id === '\0virtual:build-info') {
+          // 动态生成代码
+          return `
+            export const buildTime = "${new Date().toISOString()}";
+            export const version = "${process.env.npm_package_version}";
+            export const mode = "${process.env.NODE_ENV}";
+            export const gitHash = "${process.env.GIT_COMMIT_HASH || 'unknown'}";
+          `
+        }
+      }
+    }
+  ]
+})
+```
+```
+// 业务代码
+import { buildTime, version, mode, gitHash } from 'virtual:build-info'
+
+console.log('构建时间:', buildTime)
+console.log('版本:', version)
+console.log('模式:', mode)
+console.log('Git Hash:', gitHash)
+```
