@@ -149,3 +149,16 @@ console.log('版本:', version)
 console.log('模式:', mode)
 console.log('Git Hash:', gitHash)
 ```
+### HMR API
+常见功能：
+- accept(cb)：当前模块支持热更新，当模块更新时调用回调函数。
+- accept(deps, cb)：接受直接依赖项的更新，而无需重新加载自身。
+- dispose(cb)：模块更新前，清理上一次模块留下的副作用。例如：销毁定时器、解绑 DOM 事件、删除全局变量、清理副作用等。
+- data：于将信息从模块的前一个版本传递到下一个版本。
+- decline()：表示此模块不可热更新，如果在传播 HMR 更新时遇到此模块，浏览器应该执行完全重新加载。
+- on(event, cb)：监听 HMR 事件，如：connected、update、dispose、error 等。
+热更新流程：
+```
+修改代码 → Vite 监测到 → 重新构建模块 → 通知浏览器 → 清理旧模块 → 加载新模块 → 执行更新
+```
+具体实例或其他API，请参考[官网文档](https://vitejs.cn/vite3-cn/guide/api-hmr.html#hot-invalidate)

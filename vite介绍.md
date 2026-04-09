@@ -65,10 +65,10 @@ Vite 插件可以通过 enforce 属性来调整钩子的执行顺序（相对于
 - `默认(无)`：在Vite核心插件之后执行。
 - `post`： 在Vite核心插件和其他默认插件之后执行。
 ### 独有钩子
-- `config`：在解析Vite配置前调用，可以修改或合并配置。
+- `config`：在解析Vite配置前调用，可以修改或合并配置(修改对象属性或返回新对象)。
 - `configResolved`：在解析Vite配置后调用，可以获取到最终配置。
 - `configureServer`：在开发服务器启动前调用，可以添加中间件、代理、WebSocket(**只在 dev 环境执行**)。
-- `transformIndexHtml`：在HTML解析后调用，可以修改HTML内容。
+- `transformIndexHtml`：转换 index.html 的专用钩子。在HTML解析后调用，可以修改HTML内容。
 - `handleHotUpdate`：在执行默认的 HMR（热模块替换）逻辑之前，自定义对文件变更的处理方式。
 ### 模板解析钩子
 - `resolveId`：在解析模块时调用(即遇到一个import语句)，可以修改模块引入路径。
