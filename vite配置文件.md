@@ -9,9 +9,9 @@
   base: 默认值(/) || 绝对路径名(/foo/) || 完整的URL(https://foo.com/) || 空字符串或./,
   // 在构建时定义全局常量，将代码中的特定标识符替换成指定的值。
   // 替换发生在构建时，因此替换的值在开发时不可见。
+  // 作用范围: .js/.ts/.vue/.jsx/.tsx 中的脚本代码
+  // 如果需要放在dom中，需先自定义变量存储
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.APP_VERSION),
-    __APP_ENV__: JSON.stringify(process.env.APP_ENV),
     ALLOWED_ORIGINS: JSON.stringify(['https://example.com', 'https://test.com'])，
     TIMESTAMP: 'Date.now()',
     RANDOM: 'Math.random()',
@@ -57,7 +57,7 @@
       // 启用 WebSocket 代理
       ws: true,  
     },
-    // 用于在开发服务器启动时预加载一些模块，从而优化首次访问时的加载速度
+    // 用于在开发服务器启动时预加载一些模块，从而优化首次访问时的加载速度，针对的是业务代码的优化
     warmup: {
       // 指定需要预热的客户端文件
       clientFiles: [
@@ -232,3 +232,5 @@ export default defineConfig({
 })
 
 ```
+#### vite --debug transform
+查看控制台日志，能看到转换耗时久的文件
