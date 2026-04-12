@@ -1,5 +1,5 @@
 ### 常见配置文件
-```
+```js
 {
   // 项目根目录(index.html文件所在的位置)
   root: 默认值(process.cwd()) || 绝对路径名(/foo/) || 空字符串或./,
@@ -65,7 +65,24 @@
         './src/utils/helpers.js',
         './src/store/index.js'
       ]
-    }
+    },
+    // 用于限制 Vite 开发服务器可以访问哪些目录和文件。(monorepo项目)
+    fs: {
+      // 启用或禁用对特定目录的访问。
+      strict: true(禁止) | false(启用),
+      // 允许访问的目录列表。
+      allow: [
+        // 允许访问项目根目录, searchForWorkspaceRoot函数会自动查找 monorepo 项目的根目录
+        searchForWorkspaceRoot(process.cwd()),
+        // 允许访问 src 目录
+        path.resolve(__dirname, 'src'),
+      ],
+      // 配置禁止访问的文件或目录。
+      deny: [
+        // 禁止访问.env文件
+        '**/.env*',
+      ]
+    },
   },
   // 插件配置
   plugins: [vue()],
@@ -82,7 +99,7 @@
         modifyVars: {
           'primary-color': '#1DA57A', // 修改主题色
         },
-        // 启用 JS 特性
+        // 允许在文件中使用 ~ 关键字 或 javascript 函数 执行 JS 代码、计算、变量、方法调用。仅可在less中使用。
         javascriptEnabled: true,
       },
     },
@@ -99,28 +116,11 @@
     // 是否生成 CSS source map。
     devSourcemap: true 
   },
-  // 用于限制 Vite 开发服务器可以访问哪些目录和文件。(monorepo项目)
-  fs: {
-    // 启用或禁用对特定目录的访问。
-    strict: true(禁止) | false(启用),
-    // 允许访问的目录列表。
-    allow: [
-      // 允许访问项目根目录, searchForWorkspaceRoot函数会自动查找 monorepo 项目的根目录
-      searchForWorkspaceRoot(process.cwd()),
-      // 允许访问 src 目录
-      path.resolve(__dirname, 'src'),
-    ],
-    // 配置禁止访问的文件或目录。
-    deny: [
-      // 禁止访问.env文件
-      '**/.env*',
-    ]
-  },
-  // 自定义依赖预构建行为，它可以将第三方依赖转换为 ESM 格式并进行缓存（加速启动）
+  // 自定义依赖预构建行为，它可以将第三方依赖转换为 ESM 格式并进行缓存（加速启动），仅在开发环境生效。注意修改 optimizeDeps 后，热更新不会生效，必须重启服务器，必要时加 --force 强制刷新或配置force。
   optimizeDeps: {
     // 显式指定需要预构建的依赖。
     include: ['vue', 'vue-router', 'pinia'],
-    // 指定不需要预构建的依赖。
+    // 指定不需要预构建的依赖。排除的包必须是纯 ESM 格式。
     exclude: [ 'your-local-package', 'some-esm-only-package' ],
     // 是否强制重新预构建依赖。
     force: true | false
@@ -134,7 +134,7 @@
       // 仅监听 src 目录源码
       include: ['src/**'],
       // 忽略 node_modules、dist 目录的变化
-      ignored: ['**/node_modules/**', '**/dist/**']
+      exclude: ['**/node_modules/**', '**/dist/**']
     },
     // 是否生成manifest.json 文件（后端集成必备）
     manifest: true,
@@ -142,42 +142,48 @@
     minify: boolean | 'terser' | 'esbuild'(默认) 
     // 是否生成sourcemap（安全）
     sourcemap: false,
-    // 排除不打包的文件
-    external: ['vue', 'vue-router', 'pinia'],
     // 打包配置
     rollupOptions: {
+      // 排除不打包的文件
+      external: ['vue', 'vue-router', 'pinia'],
       // 设置入口文件，可为多个
       input: {
-        main: resolve(__dirname, 'index.html'),
-        nested: resolve(__dirname, 'nested/index.html')
+        main: path.resolve(__dirname, 'index.html'),
+        nested: path.resolve(__dirname, 'nested/index.html')
       }
       // 设置输出文件
       output: {
+        // 配置代码分割生成的 chunk 文件命名
+        chunkFileNames: "assets/js/[name]-[hash].js",
+        // 配置入口文件的命名
+        entryFileNames: "assets/js/[name]-[hash].js",
         // 把不同模块手动拆分到不同的 chunk（代码块）中，实现按需加载、减少首屏体积。
-        manualChunks: {
-          // 配置代码分割生成的 chunk 文件命名
-          chunkFileNames: "assets/js/[name]-[hash].js",
-          配置入口文件的命名
-          entryFileNames: "assets/js/[name]-[hash].js",
-          // UI 库：element-plus 单独打包
-          'ui-vendor': ['element-plus'],
-          // 工具库：lodash、axios 单独打包
-          'utils-vendor': ['lodash-es', 'axios'],
-          // 自定义输出静态文件名
-          assetFileNames: (assetInfo) => {
-            // 按扩展名分类存放
-            const ext = assetInfo.name.split('.').pop()
-            if (['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext)) {
-              return 'images/[name]-[hash].[ext]'
+        manualChunks(id){
+          if (id.includes('node_modules')) {
+            if(id.includes('vue') || id.includes('@vue')) {
+              return 'vendor-vue'
             }
-            if (['css'].includes(ext)) {
-              return 'css/[name]-[hash].[ext]'
-            }
-            if (['woff', 'woff2', 'eot', 'ttf', 'otf'].includes(ext)) {
-              return 'fonts/[name]-[hash].[ext]'
-            }
-            return 'assets/[name]-[hash].[ext]'
+            if (id.includes('element-plus')) return 'vendor-ui'
+            return 'vendor-common'
+          }         
+        },
+        // 配置静态资源（图片、CSS、字体）文件的命名
+        // assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
+        // 自定义静态文件打包
+        assetFileNames: (assetInfo) => {
+          // 按扩展名分类存放
+          const name = assetInfo.name || 'unknown'
+          const ext = name.split('.').pop()
+          if (['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(ext)) {
+            return 'images/[name]-[hash].[ext]'
           }
+          if (['css'].includes(ext)) {
+            return 'css/[name]-[hash].[ext]'
+          }
+          if (['woff', 'woff2', 'eot', 'ttf', 'otf'].includes(ext)) {
+            return 'fonts/[name]-[hash].[ext]'
+          }
+          return 'assets/[name]-[hash].[ext]'
         }
       },
       // Rollup生态的插件
@@ -190,7 +196,7 @@
 ### 补充
 #### 删除console.log的方法
 通过esbuild
-```
+```js
 export default defineConfig({
   build: {
     minify: 'esbuild',
@@ -200,7 +206,7 @@ export default defineConfig({
 
 ```
 通过terser
-```
+```js
 export default defineConfig({
   build: {
     minify: 'terser',
@@ -214,7 +220,7 @@ export default defineConfig({
 })
 ```
 选择性删除
-```
+```js
 export default defineConfig({
   build: {
     minify: 'terser',
@@ -234,3 +240,11 @@ export default defineConfig({
 ```
 #### vite --debug transform
 查看控制台日志，能看到转换耗时久的文件
+#### optimizeDeps与server.warmup的区别
+| 特性	| optimizeDeps	| server.warmup |
+|---	| ---	| --- |
+| 作用对象	| node_modules 里的第三方依赖	| 项目里的业务源码（.vue/.js/.ts 等） |
+| 核心作用	| 预构建转换依赖格式，减少请求数 | 提前转换缓存业务代码，消除请求瀑布流 |
+| 执行时机	| 开发服务器启动前，同步阻塞执行	| 开发服务器启动后，后台异步执行 |
+| 生效环境	| 仅开发环境	| 仅开发环境 |
+| 缓存位置	| 磁盘缓存 node_modules/.vite，重启不失效	| 内存缓存，重启服务器失效 |
