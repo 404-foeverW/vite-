@@ -55,7 +55,7 @@ const module = await import(`./dir/${file}.js`)
 - 改了内部包的 main/module/types 入口
 - 重新 pnpm install
 - 内部包引入了新的第三方依赖
-### 资源导入四件套
+### 资源导入识别
 vite默认支持识别的文件类型：png|jpeg|gif|svg|mp4|webm|ogg|mp3|wav|flac|aac|woff|woff2|eot|ttf|otf
 - ?url: 将资源作为一个 URL 导入
 - ?raw: 将资源作为一个字符串导入
@@ -162,3 +162,105 @@ console.log('Git Hash:', gitHash)
 修改代码 → Vite 监测到 → 重新构建模块 → 通知浏览器 → 清理旧模块 → 加载新模块 → 执行更新
 ```
 具体实例或其他API，请参考[官网文档](https://vitejs.cn/vite3-cn/guide/api-hmr.html#hot-invalidate)
+
+### 代码压缩
+#### js压缩
+- esbuild(默认)
+  - 基于Go编写的web打包工具，支持多线程打包，处理速度快。对于大多数的js语法都能够处理，但对于一些老旧浏览器(如IE11)的非标准语法无法进行兼容处理。
+- terser
+  - 基于nodejs编写的js打包工具，不支持多线程，需要借助terser-webpack-plugin/vite-plugin-terser-parallel等插件，模拟多线程打包，处理速度慢。能对各类js语法进行兼容处理。
+- 设置方式: build.minify: esbuild|terser|false
+#### css压缩
+- esbuild(默认)
+- cssnano
+  ```json
+  postcss: {
+    plugins: [
+      cssnano({preset: 'advanced'}) // 极少需要修改默认配置
+    ]
+  }
+  ```
+- lightningcss
+  ```json
+  css: {
+    // 转换CSS交给lightningcss
+    transformer: 'lightningcss',
+    lightningcss: {
+      // 关于lightningcss的配置添加在这里
+    }
+  },
+  build: {
+    // 构建CSS交给lightningcss
+    cssMinify: 'lightningcss',
+  }
+  ```
+- @fullhuman/postcss-purgecss
+  - 用于移除未使用的CSS
+  ```json
+    postcss([
+      purgecss({
+        content: ['./src/**/*.html']
+      })
+    ])
+  ```
+#### html压缩
+vite默认不会对html进行压缩，但可以使用插件vite-plugin-html-minifier-terser来实现压缩。
+```json
+plugins: [
+  minifyHtml({
+    collapseWhitespace: true,
+    removeComments: true,
+    minifyCSS: true,
+    minifyJS: true,
+  }),
+]
+```
+#### 静态资源压缩（图片、字体等）
+vite-plugin-imagemin：在构建时自动压缩图片（png, jpg, svg 等）。
+### tree-shaking
+通过构建工具对ESM模块的导入与导出关系进行静态分析，移除掉未被使用的代码。在生产构建时，vite默认会自动启用tree-shaking。
+#### 注意事项
+- tree-shaking只支持ESM语法，若第三方依赖使用了非ESM语法，则无法生效。
+- 导入第三方依赖时，最好按需引入，这样trees-shaking才能生效。
+- 若导入的文件中存在副作用，则可能无法执行tree-shaking。
+  - 副作用：在模块被导入时，立即执行了某些影响外部环境的操作，如修改全局变量、修改DOM、添加事件监听器等。
+  ```js
+  // utils.js
+  // 1. 直接修改全局变量
+  window.myUtils = { b: 1 }; 
+  // 2. 修改DOM
+  function modifyDOM() {
+    const div = document.createElement('div')
+    div.innerText = 'hello, world'
+    document.body.appendChild(div)
+  }
+  modifyDOM();
+  // 3. 添加事件监听器
+  function addEventListener() {
+    window.addEventListener('resize', () => {
+      console.log('resize')
+    })
+  }
+  addEventListener();
+  export default function sum(a, b) {
+    return a + b
+  }
+  ```
+  - 解决方案：
+  - 设置sideEffects属性
+    - 在**package.json**中设置sideEffects属性，告诉构建工具哪些文件是副作用文件，哪些文件不是。
+    ```json
+    {
+      "sideEffects": [
+        "./src/**/*.css",
+        "./src/**/*.scss",
+        "./src/**/*.sass",
+        "./src/**/*.less",
+        "./src/**/*.styl",
+        "./src/**/*.stylus",
+        "./src/**/*.vue",
+        "./src/**/*.html",
+        "./src/**/*.md"
+      ]
+    }
+    ```

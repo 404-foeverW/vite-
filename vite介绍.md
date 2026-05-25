@@ -89,4 +89,9 @@ Vite 插件可以通过 enforce 属性来调整钩子的执行顺序（相对于
 - `config` -> `configResolved` -> `configureServer` -> `buildStart` -> `transformIndexHtml`(注:浏览器请求的是HTML时) -> ?(`handleHotUpdate` -> (注：仅当文件变更时触发)) `resolveId` -> `load` -> `transform`
 #### 生产环境
 - `config` -> `configResolved` -> `outputOptions` -> `buildStart` -> `resolveId` -> `load` -> `transform` -> `moduleParsed` -> `buildEnd` -> `renderStart` -> `renderChunk` -> `generateBundle` -> `transformIndexHtml` -> `writeBundle` -> `closeBundle`
-
+## 缓存策略
+### 开发服务器的缓存策略
+#### 依赖构建阶段
+将node_modules中的第三方依赖预先打包成ESM模块，并缓存在node_modules/.vite目录下。除非依赖发生变更，否则不会重新预构建。
+#### 模块编译阶段
+对编译后的源码和ETag进行缓存，当浏览器发起请求时，Vite 会比对If-None-Match和ETag，若相同则返回304 Not Modified指示浏览器使用本地缓存。

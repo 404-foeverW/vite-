@@ -136,16 +136,25 @@
       // 忽略 node_modules、dist 目录的变化
       exclude: ['**/node_modules/**', '**/dist/**']
     },
+    // 是否启用CSS代码分割。默认值为true，表示启用。当启用时，在异步chunk中导入的CSS将内联到异步chunk本身，并在其被加载时插入。
+    cssCodeSplit: boolean,
     // 是否生成manifest.json 文件（后端集成必备）
     manifest: true,
     // 是否启用压缩或指定压缩方式
     minify: boolean | 'terser' | 'esbuild'(默认) 
+    // terser配置 详情：https://terser.nodejs.cn/docs/api-reference/
+    terserOptions: {
+      compress: {
+        drop_console: true,   // 移除所有 console.*
+        drop_debugger: true,
+      },
+    },
     // 是否生成sourcemap（安全）
     sourcemap: false,
     // 打包配置
     rollupOptions: {
-      // 排除不打包的文件
-      external: ['vue', 'vue-router', 'pinia'],
+      // 排除不打包的文件，一般配合output.globals一起使用，需要注意由于第三方库不被打包，所以须在入口的html文件中手动引入第三包链接，或使用vite-plugin-cdn-import插件
+      external: ['vue-router', 'pinia'],
       // 设置入口文件，可为多个
       input: {
         main: path.resolve(__dirname, 'index.html'),
@@ -153,6 +162,11 @@
       }
       // 设置输出文件
       output: {
+        // 配置全局变量，用于将第三方库的UMD构建中的全局变量映射到ESM格式，从而避免打包时重复打包第三方库。注意变量名称需要与第三方库的UMD/IIFE构建中的全局变量名称一致。可在node_modules/包名/dist中查看
+        globals: {
+          'vue-router': 'VueRouter',
+          pinia: 'Pinia'
+        },
         // 配置代码分割生成的 chunk 文件命名
         chunkFileNames: "assets/js/[name]-[hash].js",
         // 配置入口文件的命名
