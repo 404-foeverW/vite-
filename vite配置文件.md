@@ -7,6 +7,10 @@
   // 一般会对相对路径的资源引用进行修改
   // 生产环境下需要配置对base的映射，以便找到资源
   base: 默认值(/) || 绝对路径名(/foo/) || 完整的URL(https://foo.com/) || 空字符串或./,
+  // 指定环境变量文件，默认值是.env
+  envDir: 默认值(process.cwd()) || 绝对路径名(/foo/) || 空字符串或./,
+  // 以envPrefix开头的环境变量会通过 import.meta.env 暴露在你的客户端源码中。
+  envPrefix: 默认值(VITE_) || 自定义前缀,
   // 在构建时定义全局常量，将代码中的特定标识符替换成指定的值。
   // 替换发生在构建时，因此替换的值在开发时不可见。
   // 作用范围: .js/.ts/.vue/.jsx/.tsx 中的脚本代码
@@ -55,7 +59,7 @@
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
       // 启用 WebSocket 代理
-      ws: true,  
+      ws: true, 
     },
     // 用于在开发服务器启动时预加载一些模块，从而优化首次访问时的加载速度，针对的是业务代码的优化
     warmup: {
@@ -83,6 +87,15 @@
         '**/.env*',
       ]
     },
+    // 开启 CORS（默认开启）
+    cors: true,
+    // 开启热更新（默认开启）
+    hmr: true,
+    // 文件监听配置 
+    watch: {
+      // 忽略监听的目录
+      ignored: ['node_modules'] 
+    } 
   },
   // 插件配置
   plugins: [vue()],
@@ -90,6 +103,11 @@
   css: {
     // 配置 CSS 预处理器
     preprocessorOptions: {
+      // CSS 模块配置
+      modules: {
+        // 类名转为驼峰（如 .btn-primary → btnPrimary）
+        localsConvention: 'camelCase'
+      },
       scss: {
         // 在每个 .scss 文件开头自动注入
         additionalData: `@import "@/styles/variables.scss"; @import "@/styles/mixins.scss";`
@@ -127,7 +145,12 @@
   },
   // 构建配置
   build: {
-    outDir: './dist', // 指定输出目录
+    // 指定输出目录
+    outDir: './dist',
+    // 静态资源（图片/样式）输出目录（默认 assets）
+    assetsDir: 'assets',
+    // 小于该大小的资源会被内联为 base64 编码
+    assetsInlineLimit: 4096,
     // 监听源码变化，一旦文件修改，自动重新执行生产构建。
     // 开启方式还有 vite build --watch
     watch: {
@@ -136,6 +159,8 @@
       // 忽略 node_modules、dist 目录的变化
       exclude: ['**/node_modules/**', '**/dist/**']
     },
+    // 打包前清空 outDir（默认 true）
+    emptyOutDir: true,
     // 是否启用CSS代码分割。默认值为true，表示启用。当启用时，在异步chunk中导入的CSS将内联到异步chunk本身，并在其被加载时插入。
     cssCodeSplit: boolean,
     // 是否生成manifest.json 文件（后端集成必备）

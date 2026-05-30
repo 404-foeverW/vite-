@@ -10,26 +10,29 @@ vite是一个主打极速开发+高效生产构建的打包工具，它利用**[
 ## vite的构建流程
 ### 开发环境的构建
 #### 1.启动阶段
-- 命令执行：运行指令`vite`或`npm run dev`，读取项目根目录下的vite.config.js配置文件，合并默认配置
+- 命令执行：运行指令`vite`或`npm run dev`，读取项目根目录下的vite.config.js配置文件，合并默认配置。
+- 加载插件。
 - 依赖预构建:
   - 目的：虽然浏览器支持ESM，但有些第三方库可能还是CommonJS格式，或者内部模块相互依赖。如果浏览器直接请求，可能会触发大量HTTP请求，导致页面卡顿。
   - 过程：使用esbuild扫描代码，找出所有第三方依赖。
-  - 结果：将依赖转化为ESM格式，并打包成一个文件存入到`node_modules/.vite`目录下。
+  - 结果：将依赖转化为ESM格式，合并嵌套依赖并打包成一个文件存入到`node_modules/.vite`目录下。
   - 重新构建的条件：
     - package.json 中的 dependencies 列表
     - 包管理器的 lockfile，例如 package-lock.json, yarn.lock，或者 pnpm-lock.yaml
     - 可能在 vite.config.js 相关字段中配置过的
     只有在上述其中一项发生更改时，才需要重新运行预构建。
+- 启动化开发服务器。
+- 启动chokidar监听文件变化。
 #### 2.请求与编译阶段
 - 请求拦截：当浏览器访问locahost:5173(默认端口号)时，vite会拦截所有请求
 - 处理HTML：首先返回index.html文件。浏览器解析HTML，遇到`<script type="module">`标签，会向服务器请求该模块。
 - 处理JS：
   - vite会根据请求的路径，找到对应的文件。
   - 通过**转换插件链**处理文件（例如：将 .vue 单文件组件拆解成 JS/CSS/Template，将 TypeScript 转为 JavaScript，将 Sass 转为 CSS）。
-  - 路径重写：如果代码中有 import { ref } from 'vue'，Vite 会将其重写为指向预构建好的缓存路径 /node_modules/.vite/deps/vue.js。
+  - 路径重写：如果代码中有import { ref } from 'vue'，Vite会将其重写为指向预构建好的缓存路径 /node_modules/.vite/deps/vue.js。
   - 返回处理后的JS代码。
 - 递归加载：浏览器解析返回的JS，发现新的import依赖(如 import App from './App.vue')，会再次向服务器请求，vite再次拦截并处理，直到所有资源都加载完成。
-#### 热更新(HMR)阶段
+#### 3.热更新(HMR)阶段
 - 监听变化： Vite通过chokidar监听文件系统变化。
 - WebSocket通信：当保存修改文件时，Vite通过WebSocket向客户端发送消息，告知哪个模块发生变化。
 - 局部更新：客户端(指浏览器里运行的Vite内置客户端脚本)收到消息后，通过 import 动态重新请求该模块，并利用 HMR API 接口替换旧模块，保持页面状态不丢失。
@@ -38,6 +41,8 @@ vite是一个主打极速开发+高效生产构建的打包工具，它利用**[
 - 命令执行：运行指令`vite build`
 - 加载配置：读取ite.config.js中的build配置项。
 #### 2.Rollup打包流程
+- 加载配置文件。
+- 复用开发阶段的依赖预构建结果（或重新构建），确保依赖为 ESM 格式；
 - 入口解析：
   - 找到入口文件，默认是`index.html`中引入的JS(注意在vite项目中`index.html`应在根目录下面)。
 - 依赖图构建：
@@ -54,10 +59,33 @@ vite是一个主打极速开发+高效生产构建的打包工具，它利用**[
   - 生成.css文件(提取JS中的CSS)
   - 生成资源文件(如图片、字体等)，并加上hash值，防止缓存问题。
   - 替换环境变量(如process.env.NODE_ENV)为对应的值。
-  - 移除开发时的代码(如console.log)。
+  - 进行代码压缩。
+  - 生成html文件。
+  - 生成 Manifest。
 #### 3.后处理
 - 生成manifest：如果配置了`build.rollupOptions.output.manualChunks`，vite会生成一个manifest文件，用于记录chunk的名称和对应的文件路径。
 - HTML注入：Vite会回读index.html，将打包生成的JS/CSS文件注入到HTML中，替换开发时的路径。
+## vite怎么处理.vue文件
+- 注册@vitejs/plugin-vue插件，拦截.vue文件的请求。执行的时机是configureServer(开发环境下)或resolveId|load(生产环境下)。
+- 使用vite-compiler-sfc插件解析.vue文件，将其划分为三个部分:
+  - 模板(template)：使用@vue/compiler-dom插件将template编译为render函数，本质是字符串拼接的JavaScript代码，用于运行时生成VNode。编译好后会将其写入到组件的脚本逻辑中。
+  - 脚本(script)：
+    - 普通的script标签：直接提取代码，转化为es模块。
+    - script setup标签：使用@vue/compiler-sfc插件将其编译为普通的组件选项式代码，再转换为es模块。
+  - 样式(style)：
+    - 带scoped的样式：使用@vue/compiler-sfc插件将其编译为带有hash值的普通样式代码，使其只作用于当前组件。
+    - 带module的样式：编译为CSS Modules，生成唯一类名映射，并通过useCssModule暴露给脚本使用。
+    - 普通样式：直接作为全局CSS处理（或通过 Vite 的 CSS 预处理器插件处理 Less/Sass 等）。
+- 将这三部分合成一个标准的ES模块，返回给浏览器。
+```js
+// 简化后的编译结果示例
+import { render } from './App.vue?vue&type=template&id=7ba5bd90'
+import script from './App.vue?vue&type=script&setup=true&id=7ba5bd90'
+import './App.vue?vue&type=style&index=0&id=7ba5bd90&scoped=true'
+
+script.render = render
+export default script
+```
 ## vite钩子
 ### enforce修饰符
 Vite 插件可以通过 enforce 属性来调整钩子的执行顺序（相对于 Vite 内核插件）
